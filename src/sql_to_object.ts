@@ -13,7 +13,9 @@ const sqlString: string = `
       dept_id INTEGER,
       phone_number TEXT,
       CONSTRAINT fk__view_as__department_name 
-      FOREIGN KEY (dept_id) REFERENCES departments(dept_id)
+      FOREIGN KEY (dept_id) REFERENCES departments(dept_id),
+      INDEX idx_username (username),
+      INDEX idx_dept_id (dept_id)
   )
 `;
 
@@ -33,59 +35,81 @@ catch (e) {
 //console.log(ast);
 
 /**
- * Transforms the AST into a flat object with type and foreign key info.
+ * Transforms the AST into a flat object with support for indexes.
  * @param ast The Abstract Syntax Tree object from node-sql-parser.
- * @returns A flat object representing the schema, or null if parsing fails.
+ * @returns A flat object representing the schema.
+ * @throws An error if a reserved column name ('tableName' or 'indexes') is used.
  */
-function transformAstToFlatWithView(ast: any): Record<string, string> | null {
-	if (ast.type !== 'create' || ast.keyword !== 'table') {
-		return null;
-	}
+function transformAstToFlatWithIndexes(ast: any): Record<string, any> | null {
+  if (ast.type !== 'create' || ast.keyword !== 'table') {
+    return null;
+  }
 
-	const typeMap: Record<string, string> = {
-		'INTEGER': 'number',
-		'TEXT': 'string',
-		'REAL': 'number',
-	};
+  const typeMap: Record<string, string> = {
+    'INTEGER': 'number', 'TEXT': 'string', 'REAL': 'number',
+  };
 
-	const result: { tableName: string;[key: string]: string } = {
-		tableName: ast.table[0].table,
-	};
+  // The result object's type is updated to allow for the 'indexes' array
+  const result: {
+    tableName: string;
+    indexes?: string;
+    [key: string]: any;
+  } = {
+    tableName: ast.table[0].table,
+  };
+  const indexColumns: string[] = [];
 
-	for (const def of ast.create_definitions) {
-		if (def.resource === 'column') {
-			const fieldName: string = def.column.column;
-			const sqlDataType: string = def.definition.dataType;
-			result[fieldName] = typeMap[sqlDataType] || 'unknown';
-		}
-		// CORRECTED: Use 'FOREIGN KEY' (uppercase) and the new AST paths
-		else if (def.constraint_type === 'FOREIGN KEY') {
-			// Path changed from def.columns[0].column
-			const localColumn: string = def.definition[0].column;
+  for (const def of ast.create_definitions) {
+	console.log('=============================================================');
+	console.log(def);
+    // Handle standard column definitions
+    if (def.resource === 'column') {
+      const fieldName: string = def.column.column;
 
-			if (result[localColumn]) {
-				const refTable: string = def.reference_definition.table[0].table;
-				// Path changed from def.reference_definition.columns[0].column
-				const refColumn: string = def.reference_definition.definition[0].column;
-				let fkString: string = `|FK:${refTable}:${refColumn}`;
+      // ✨ ADDED: Error check for reserved column names
+      if (fieldName.toLowerCase() === 'tablename' || fieldName.toLowerCase() === 'indexes') {
+        throw new Error(`Column name '${fieldName}' is a reserved word and cannot be used.`);
+      }
 
-				// ✨ NEW, MORE ROBUST METHOD: Parse the constraint name
-				const constraintName: string | null = def.constraint;
-				if (constraintName && constraintName.includes('__view_as__')) {
-					const viewColumn = constraintName.split('__view_as__')[1];
-					if (viewColumn) {
-						fkString += `:${viewColumn}`; // Append the view column
-					}
-				}
+      result[fieldName] = typeMap[def.definition.dataType] || 'unknown';
+    } 
+    // Handle foreign key definitions
+    else if (def.constraint_type === 'FOREIGN KEY') {
+      const localColumn: string = def.definition[0].column;
+      if (result[localColumn]) {
+        const refTable: string = def.reference_definition.table[0].table;
+        const refColumn: string = def.reference_definition.definition[0].column;
+        let fkString: string = `|FK:${refTable}:${refColumn}`;
 
-				result[localColumn] += fkString;
-			}
-		}
-	}
+        const constraintName: string | null = def.constraint;
+        if (constraintName && constraintName.includes('__view_as__')) {
+          const viewColumn = constraintName.split('__view_as__')[1];
+          // UPDATED: Appending the view column with a colon separator
+          if (viewColumn) fkString += `:${viewColumn}`;
+        }
+        
+        result[localColumn] += fkString;
+      }
+    } 
+    // ✨ ADDED: Handle inline index definitions
+    else if (def.resource === 'index') {
+      const indexedColumn: string = def.definition[0].column;
+      indexColumns.push(indexedColumn);
+    }
+  }
 
-	return result;
+  // Add the collected index columns to the final object if any exist
+  if (indexColumns.length > 0) {
+    result.indexes = indexColumns.join(',');
+  }
+
+  return result;
 }
 
-const myFlatObject = transformAstToFlatWithView(ast);
 
-console.log(JSON.stringify(myFlatObject, null, 2));
+try {
+  const mySchemaObject = transformAstToFlatWithIndexes(ast);
+  console.log(JSON.stringify(mySchemaObject, null, 2));
+} catch (e: any) {
+  console.error("Schema generation failed:", e.message);
+}
