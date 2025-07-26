@@ -127,11 +127,10 @@ function parseInsert(ast: AST): Record<string, any> {
 
 // --- DEMO ---
 console.log("--- Parsing INSERT statement ---");
-const insertSql = 'insert into users (user_id, username, dept_id, building, phone_number) values (10, "fred", "accounting", "central", "800-867-5309")';
+const insertSql = 'insert into users (user_id, username, dept_id, building, phone_number) values (10, "fred", "ACCT", "central", "800-867-5309")';
 console.log(JSON.stringify(parseSql(insertSql), null, 2));
 
-// --- DEMO ---
-console.log("--- Parsing CREATE statement ---");
+console.log("--- Parsing CREATE statements ---");
 const createSql = `
   CREATE TABLE users (
       user_id INTEGER,
@@ -146,6 +145,16 @@ const createSql = `
   )
 `;
 console.log(JSON.stringify(parseSql(createSql), null, 2));
+
+const createSql2 = `
+  CREATE TABLE departments (
+      dept_id TEXT,
+	  department_name TEXT,
+      city TEXT,
+      INDEX idx_dept_id (dept_id)
+  )
+`;
+console.log(JSON.stringify(parseSql(createSql2), null, 2));
 
 console.log("\n--- Parsing SELECT statement ---");
 const selectSql = 'select username, phone_number from users where username = "fred" and (department = "accounting" or building = "central")';
