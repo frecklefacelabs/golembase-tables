@@ -28,7 +28,7 @@ function parseSql(sqlString: string): Record<string, any> | null  {
 }
 
 // -----------------------------------------------------------------------------
-// CREATE TABLE PARSER (Unchanged)
+// CREATE TABLE PARSER
 // -----------------------------------------------------------------------------
 function parseCreateTable(ast: AST): Record<string, any> | null {
   // This logic remains the same as before.
@@ -72,7 +72,7 @@ function parseCreateTable(ast: AST): Record<string, any> | null {
 }
 
 // -----------------------------------------------------------------------------
-// SELECT PARSER (Unchanged)
+// SELECT PARSER
 // -----------------------------------------------------------------------------
 function parseSelect(ast: AST): Record<string, any> {
   // This logic remains the same as before.
