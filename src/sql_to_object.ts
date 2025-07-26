@@ -54,6 +54,49 @@ export const SQLCreateTableToGBCreate = (app:string, createSql: string): GolemBa
 	return create;
 }
 
+export const SQLInsertToGBCreate = (app: string, insertSQL: string): GolemBaseCreate => {
+
+	let insertObj: any = { app: app, ...parseSql(insertSQL) };
+	console.log(insertObj);
+
+	const create: GolemBaseCreate = {
+		data: encoder.encode(`${insertObj.type} ${insertObj.tablename}`),
+		btl: 100,
+		...transformPOJOToAnnotations(insertObj)
+	};
+
+	return create;
+}
+
+/**
+ * Filters an object to include only specified keys, plus a set of mandatory keys.
+ *
+ * @param select A comma-delimited string of keys to include in the result.
+ * @param obj The source object to filter.
+ * @returns A new object containing only the selected and mandatory keys.
+ */
+export const filterObjectBySelect = (select: string, obj: Record<string, any>): Record<string, any> => {
+  // Get the list of keys to keep from the 'select' string.
+  const keysToKeep = select.split(',');
+
+  // Initialize the new object with the three always-included fields.
+  const filteredObj: Record<string, any> = {
+    app: obj.app,
+    type: obj.type,
+    tablename: obj.tablename,
+  };
+
+  // Iterate over the keys we want to keep.
+  for (const key of keysToKeep) {
+    // Check if the source object actually has this property before adding it.
+    if (obj.hasOwnProperty(key)) {
+      filteredObj[key] = obj[key];
+    }
+  }
+
+  return filteredObj;
+}
+
 // The main function that dispatches to the correct parser
 export const parseSql = (sqlString: string): Record<string, any> | null => {
 	try {
@@ -156,9 +199,9 @@ function parseSelect(ast: AST): Record<string, any> {
 	};
 	const selectedColumns = (ast as any).columns.map((col: any) => col.expr.column).join(',');
 	const tableName = (ast as any).from[0].table;
-	const typeClause = `type = "${tableName}"`;
+	const typeClause = `type = "tabledata" && tablename = "${tableName}"`;
 	const mainWhereClause = buildWhereString((ast as any).where);
-	return { select: selectedColumns, where: `${typeClause} && ${mainWhereClause}` };
+	return { select: selectedColumns, where: `${typeClause}${mainWhereClause===''?'':' && '}${mainWhereClause}` };
 }
 
 // -----------------------------------------------------------------------------
@@ -168,8 +211,11 @@ function parseInsert(ast: AST): Record<string, any> {
 	const insertAst = ast as any; // Cast to 'any' for easier property access
 	const result: { [key: string]: any } = {};
 
-	// Set the 'type' property from the table name
-	result.type = insertAst.table[0].table;
+	// Set the type to tabledata
+	result.type = 'tabledata';
+
+	// Set the 'tablename' property from the table name
+	result.tablename = insertAst.table[0].table;
 
 	const columns: string[] = insertAst.columns;
 	// The values are in a nested structure

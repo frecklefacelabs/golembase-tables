@@ -1,6 +1,6 @@
-import { Annotations, transformListPOJOToAnnotations, transformPOJOToAnnotations } from "@freckleface/golembase-js-transformations";
+import { Annotations, transformAnnotationsToPOJO, transformListPOJOToAnnotations, transformPOJOToAnnotations } from "@freckleface/golembase-js-transformations";
 import { AccountData, Annotation, createClient, GolemBaseCreate, Tagged } from "golem-base-sdk";
-import { parseSql, SQLCreateTableToGBCreate } from "./sql_to_object.js";
+import { filterObjectBySelect, parseSql, SQLCreateTableToGBCreate, SQLInsertToGBCreate } from "./sql_to_object.js";
 import { readFileSync } from "fs";
 
 /**
@@ -66,10 +66,88 @@ export const test1 = async () => {
 			city TEXT,
 			INDEX idx_dept_id (dept_id),
 			INDEX idx_department_name (department_name)
-		)
-		`
+		)`
 	)
 	console.log(create2);
+
+	const insert1 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')");
+	console.log(insert1);
+
+	const insert2 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')");
+	console.log(insert2);
+
+	const insert3 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')");
+	console.log(insert3);
+
+	const insert4 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')");
+	console.log(insert4);
+
+	let creates: GolemBaseCreate[] = [
+
+		SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+			`CREATE TABLE users (
+				user_id INTEGER,
+				username TEXT,
+				dept_id INTEGER,
+				building TEXT,
+				phone_number TEXT,
+				CONSTRAINT fk__view_as__department_name 
+				FOREIGN KEY (dept_id) REFERENCES departments(dept_id),
+				INDEX idx_username (username),
+				INDEX idx_dept_id (dept_id)
+			)`
+		),
+		SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+			`CREATE TABLE departments (
+				dept_id INTEGER,
+				department_name TEXT,
+				city TEXT,
+				INDEX idx_dept_id (dept_id),
+				INDEX idx_department_name (department_name)
+			)`
+		),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (101, 'asmith', 'ACCT', 'Main', '555-0101');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (102, 'bjones', 'MGT', 'West Wing', '555-0102');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (103, 'cwilliams', 'ACCT', 'Main', '555-0103');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (104, 'davis_r', 'HR', 'Annex', '555-0104');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (105, 'emiller', 'MGT', 'West Wing', '555-0105');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (106, 'fgarcia', 'IT', 'South Tower', '555-0106');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (107, 'h.chen', 'ACCT', 'Main', '555-0107');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (108, 'ijackson', 'HR', 'Annex', '555-0108');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (109, 'kim_s', 'IT', 'South Tower', '555-0109');"),
+		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (110, 'l.taylor', 'MGT', 'West Wing', '555-0110');"),
+
+	];
+
+	// Joins happen automatically; they're built in via view-as constraints on foreign keys
+
+	//const receipts = await client.createEntities(creates);
+	//console.log(receipts);
+
+	// const selectSql = "select usernanme, dept_id from users";
+	// const selectSqlObj = parseSql(selectSql);
+	// const result1 = await client.queryEntities(selectSqlObj?.where);
+	// console.log(result1);
+
+	// Here's a good example of why we probably want to make calls into the library at some level
+	// The call happens after prepping the SQL and before selecting out the fields
+	const selectSql2 = "select username, dept_id from users where building = 'Main'";
+	const selectSqlObj2 = parseSql(selectSql2);
+	console.log(selectSqlObj2);
+	const result2 = await client.queryEntities(selectSqlObj2?.where);
+	console.log(result2);
+	for (let item of result2) {
+		const metadata = await client.getEntityMetaData(item.entityKey);
+		// Convert to a data object
+		const obj = await transformAnnotationsToPOJO(metadata);
+		//console.log(obj);
+		const final = filterObjectBySelect(selectSqlObj2?.select, obj);
+		console.log(final);
+	}
 
 	// Load the indexer entity (if present; if not, create the initial object)
 	// Add on this table's indexes (username, dept_id) and update with current data
