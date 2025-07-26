@@ -1,6 +1,6 @@
 import { Annotations, transformListPOJOToAnnotations, transformPOJOToAnnotations } from "@freckleface/golembase-js-transformations";
 import { AccountData, Annotation, createClient, GolemBaseCreate, Tagged } from "golem-base-sdk";
-import { CreateTableSQLToGBCreate, parseSql } from "./sql_to_object.js";
+import { parseSql, SQLCreateTableToGBCreate } from "./sql_to_object.js";
 import { readFileSync } from "fs";
 
 /**
@@ -44,7 +44,7 @@ export const test1 = async () => {
 	// Todo: Check if table by this name already exists; if so, grab it and do an update/overwrite
 
 	// todo: Need to handle situation of this being an update
-	const create = CreateTableSQLToGBCreate('GOLEM-SQLTEST-v0.1',
+	const create = SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
 		`CREATE TABLE users (
 			user_id INTEGER,
 			username TEXT,
@@ -58,6 +58,18 @@ export const test1 = async () => {
 		)`
 	);
 	console.log(create);
+
+	const create2 = SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+		`CREATE TABLE departments (
+		    dept_id INTEGER,
+			department_name TEXT,
+			city TEXT,
+			INDEX idx_dept_id (dept_id),
+			INDEX idx_department_name (department_name)
+		)
+		`
+	)
+	console.log(create2);
 
 	// Load the indexer entity (if present; if not, create the initial object)
 	// Add on this table's indexes (username, dept_id) and update with current data
@@ -88,7 +100,7 @@ export const test1 = async () => {
 	// 	]
 	// }
 
-	let indexer = {
+	/*let indexer = {
 		tables: ["departments"],
 		view_as: [ ],
 		departments_dept_it: [ "ACCT", "IT", "MGT", "HR" ],
@@ -101,7 +113,7 @@ export const test1 = async () => {
 	// Save the entities (If indexer already exists, use Update instead of Create)
 	const receipts = await client.createEntities([create, indexerEntity]);
 	console.log(receipts);
-
+	*/
 }
 
 await test1();

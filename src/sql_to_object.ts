@@ -24,6 +24,7 @@ const decoder = new TextDecoder();
    and I'm not sure I should make the caller handle first retreiving the index.
    But that would "step up" this from a passive parser to an active player, reading/writing data.
    THOUGHT: Build a "second level" on top of this which handles that part?
+   THOUGHT2: Put indexes in the table schema right here
  *
  * This returns several items:
  *   Either a Create or Update for the table
@@ -32,9 +33,17 @@ const decoder = new TextDecoder();
  * 
  * It's up to the caller to send it across to a node
 */
-export const CreateTableSQLToGBCreate = (app:string, createSql: string): any => {
+export const SQLCreateTableToGBCreate = (app:string, createSql: string): GolemBaseCreate => {
 
-	const createTableObj: any = { app: app, ...parseSql(createSql) };
+	let createTableObj: any = { app: app, ...parseSql(createSql) };
+
+	console.log(createTableObj);
+	
+	// Create empty index entries, which will get filled in as we add data for this table
+	for (let index of createTableObj.indexes?.split(',') || []) {
+		createTableObj[`index_${index}`] = '';
+	}
+	console.log(createTableObj);
 
 	const create: GolemBaseCreate = {
 		data: encoder.encode(`${createTableObj.type} ${createTableObj.tablename}`),
@@ -42,11 +51,7 @@ export const CreateTableSQLToGBCreate = (app:string, createSql: string): any => 
 		...transformPOJOToAnnotations(createTableObj)
 	};
 
-	return {
-		creates: [create],
-		updates: []
-	};
-	
+	return create;
 }
 
 // The main function that dispatches to the correct parser
