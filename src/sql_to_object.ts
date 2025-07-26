@@ -201,7 +201,7 @@ function parseSelect(ast: AST): Record<string, any> {
 	const tableName = (ast as any).from[0].table;
 	const typeClause = `type = "tabledata" && tablename = "${tableName}"`;
 	const mainWhereClause = buildWhereString((ast as any).where);
-	return { select: selectedColumns, where: `${typeClause}${mainWhereClause===''?'':' && '}${mainWhereClause}` };
+	return { select: selectedColumns, table: tableName, where: `${typeClause}${mainWhereClause===''?'':' && '}${mainWhereClause}` };
 }
 
 // -----------------------------------------------------------------------------

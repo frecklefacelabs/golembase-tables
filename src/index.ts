@@ -138,6 +138,10 @@ export const test1 = async () => {
 	const selectSql2 = "select username, dept_id from users where building = 'Main'";
 	const selectSqlObj2 = parseSql(selectSql2);
 	console.log(selectSqlObj2);
+	// Grab the tablename and grab its metadata
+	// TODO: Store table's hash as well so we can grab it directly rather than query?
+	//const select_table = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${}"`)
+
 	const result2 = await client.queryEntities(selectSqlObj2?.where);
 	console.log(result2);
 	for (let item of result2) {
