@@ -1,6 +1,6 @@
 import { transformPOJOToAnnotations } from '@freckleface/golembase-js-transformations';
 import { GolemBaseCreate, GolemBaseUpdate } from 'golem-base-sdk';
-import pkg, { AST } from 'node-sql-parser';
+import pkg, { AST, Create } from 'node-sql-parser';
 const { Parser } = pkg;
 import * as util from 'util';
 
@@ -33,7 +33,45 @@ const decoder = new TextDecoder();
  * 
  * It's up to the caller to send it across to a node
 */
-export const SQLCreateTableToGBCreate = (app:string, createSql: string): GolemBaseCreate => {
+
+// 1. Define the shape of the 'data' object for each SQL type
+export type CreateTableData = { type: 'table'; tablename: string; indexes?: string;[key: string]: any; };
+export type SelectData = { select: string; tablename: string; where: string; };
+export type InsertData = { type: 'tabledata'; tablename: string;[key: string]: any; };
+
+// 2. Create the main discriminated union type for the final result
+export type ParseResult =
+	| { sqlType: 'create table'; data: CreateTableData | null }
+	| { sqlType: 'select'; data: SelectData }
+	| { sqlType: 'insert'; data: InsertData };
+
+export type SqlBatches = ParseResult[][];
+
+export const CreateTableObjToGBCreate = (app: string, parseResult: ParseResult): GolemBaseCreate => {
+
+	if (parseResult.sqlType != 'create table' || !parseResult.data) {
+		throw new Error("Invalid input: Expected a 'create table' parse result with data.");
+	}
+
+	let createTableObj: CreateTableData = { app: app, ...parseResult.data };
+
+	// Create empty index entries, which will get filled in as we add data for this table
+	for (let index of createTableObj.indexes?.split(',') || []) {
+		createTableObj[`index_${index}`] = '';
+	}
+	//console.log(createTableObj);
+
+	const create: GolemBaseCreate = {
+		data: encoder.encode(`${createTableObj.type} ${createTableObj.tablename}`),
+		btl: 100,
+		...transformPOJOToAnnotations(createTableObj)
+	};
+
+	return create;
+
+}
+
+export const SQLCreateTableToGBCreate = (app: string, createSql: string): GolemBaseCreate => {
 
 	let createTableObj: any = { app: app, ...parseSql(createSql) };
 
@@ -47,6 +85,25 @@ export const SQLCreateTableToGBCreate = (app:string, createSql: string): GolemBa
 		data: encoder.encode(`${createTableObj.type} ${createTableObj.tablename}`),
 		btl: 100,
 		...transformPOJOToAnnotations(createTableObj)
+	};
+
+	return create;
+}
+
+export const InsertObjToGBCreate = (app: string, parseResult: ParseResult): GolemBaseCreate => {
+
+	if (parseResult.sqlType != 'insert' || !parseResult.data) {
+		throw new Error("Invalid input: Expected an 'insert' parse result with data.");
+	}
+
+	let insertObj: InsertData = { app: app, ...parseResult.data };
+
+	insertObj.app = app;
+
+	const create: GolemBaseCreate = {
+		data: encoder.encode(`${insertObj.type} ${insertObj.tablename}`),
+		btl: 100,
+		...transformPOJOToAnnotations(insertObj)
 	};
 
 	return create;
@@ -74,56 +131,56 @@ export const SQLInsertToGBCreate = (app: string, insertSQL: string): GolemBaseCr
  * @returns A new object containing only the selected and mandatory keys.
  */
 export const filterObjectBySelect = (select: string, obj: Record<string, any>): Record<string, any> => {
-  // Get the list of keys to keep from the 'select' string.
-  const keysToKeep = select.split(',');
+	// Get the list of keys to keep from the 'select' string.
+	const keysToKeep = select.split(',');
 
-  // Initialize the new object with the three always-included fields.
-  const filteredObj: Record<string, any> = {
-    app: obj.app,
-    type: obj.type,
-    tablename: obj.tablename,
-  };
+	// Initialize the new object with the three always-included fields.
+	const filteredObj: Record<string, any> = {
+		app: obj.app,
+		type: obj.type,
+		tablename: obj.tablename,
+	};
 
-  // Iterate over the keys we want to keep.
-  for (const key of keysToKeep) {
-    // Check if the source object actually has this property before adding it.
-    if (obj.hasOwnProperty(key)) {
-      filteredObj[key] = obj[key];
-    }
-  }
+	// Iterate over the keys we want to keep.
+	for (const key of keysToKeep) {
+		// Check if the source object actually has this property before adding it.
+		if (obj.hasOwnProperty(key)) {
+			filteredObj[key] = obj[key];
+		}
+	}
 
-  return filteredObj;
+	return filteredObj;
 }
 
 export interface ParsedForeignKey {
-  tablename: string;
-  localKey: string;
-  viewKey: string;
+	tablename: string;
+	localKey: string;
+	viewKey: string;
 };
 export const parseForeignKeyString = (input: string): { tablename: string; localKey: string; viewKey: string } | null => {
-  // Regex to match the pattern and capture the three text parts.
-  const fkRegex = /^.*\|FK:(.*):(.*):(.*)$/;
+	// Regex to match the pattern and capture the three text parts.
+	const fkRegex = /^.*\|FK:(.*):(.*):(.*)$/;
 
-  // Use the .match() method to execute the regex against the input string.
-  const match = input.match(fkRegex);
+	// Use the .match() method to execute the regex against the input string.
+	const match = input.match(fkRegex);
 
-  // If match is null, the string didn't fit the pattern.
-  if (!match) {
-    return null;
-  }
+	// If match is null, the string didn't fit the pattern.
+	if (!match) {
+		return null;
+	}
 
-  // The captured groups are in the resulting array at indices 1, 2, and 3.
-  // match[0] would be the entire matched string.
-  return {
-    tablename: match[1],    // The first captured group: 'departments'
-    localKey: match[2], // The second captured group: 'dept_id'
-    viewKey: match[3],  // The third captured group: 'department_name'
-  };
+	// The captured groups are in the resulting array at indices 1, 2, and 3.
+	// match[0] would be the entire matched string.
+	return {
+		tablename: match[1],    // The first captured group: 'departments'
+		localKey: match[2], // The second captured group: 'dept_id'
+		viewKey: match[3],  // The third captured group: 'department_name'
+	};
 }
 
 // The flattened return type for a single result
 type FkQueryResult = {
-  queryString: string;
+	queryString: string;
 } & ParsedForeignKey;
 
 /**
@@ -134,54 +191,102 @@ type FkQueryResult = {
  * @returns An array of objects, one for each foreign key found.
  */
 export const buildFkQueries = (pojo: Record<string, any>, fks: Record<string, ParsedForeignKey>): FkQueryResult[] => {
-  // Initialize an empty array to store all the results
-  const results: FkQueryResult[] = [];
+	// Initialize an empty array to store all the results
+	const results: FkQueryResult[] = [];
 
-  for (const [key, value] of Object.entries(pojo)) {
-    // Check if the current key from the POJO exists in our FKs map
-    if (fks[key]) {
-      const fkInfo = fks[key];
+	for (const [key, value] of Object.entries(pojo)) {
+		// Check if the current key from the POJO exists in our FKs map
+		if (fks[key]) {
+			const fkInfo = fks[key];
 
-      const quote = (val: any) => typeof val === 'string' ? `"${val}"` : val;
-      const appClause = `app=${quote(pojo.app)}`;
-      const typeClause = `type="tabledata"`;
-      const tableClause = `tablename="${fkInfo.tablename}"`;
-      const keyClause = `${fkInfo.localKey}=${quote(value)}`;
-      const assembledQueryString = `${appClause} && ${typeClause} && ${tableClause} && ${keyClause}`;
+			const quote = (val: any) => typeof val === 'string' ? `"${val}"` : val;
+			const appClause = `app=${quote(pojo.app)}`;
+			const typeClause = `type="tabledata"`;
+			const tableClause = `tablename="${fkInfo.tablename}"`;
+			const keyClause = `${fkInfo.localKey}=${quote(value)}`;
+			const assembledQueryString = `${appClause} && ${typeClause} && ${tableClause} && ${keyClause}`;
 
-      // ✨ Push the new object into the results array instead of returning
-      results.push({
-        queryString: assembledQueryString,
-        ...fkInfo
-      });
-    }
-  }
+			// ✨ Push the new object into the results array instead of returning
+			results.push({
+				queryString: assembledQueryString,
+				...fkInfo
+			});
+		}
+	}
 
-  // Return the array of all found foreign key queries
-  return results;
+	// Return the array of all found foreign key queries
+	return results;
+}
+
+/**
+ * Groups a list of parsed SQL statements into batches.
+ * 'create table' and 'insert' statements are grouped together.
+ * 'select' statements are always in their own batch.
+ *
+ * @param statements An array of ParseResult objects.
+ * @returns The statements grouped into batches.
+ */
+export const groupSqlIntoBatches = (statements: ParseResult[]): SqlBatches => {
+	const batches: SqlBatches = [];
+	let currentBatch: ParseResult[] = [];
+
+	for (const statement of statements) {
+		if (statement.sqlType === 'select') {
+			// If the current batch has items, push it to the main list first.
+			if (currentBatch.length > 0) {
+				batches.push(currentBatch);
+			}
+			// Reset the current batch.
+			currentBatch = [];
+			// Push the select statement as its own new batch.
+			if (statement.data) {
+				batches.push([statement]);
+			}
+		} else {
+			// For 'create table' or 'insert', just add to the current batch.
+			if (statement.data) {
+				currentBatch.push(statement);
+			}
+		}
+	}
+
+	// After the loop, if there's anything left in the current batch, add it.
+	if (currentBatch.length > 0) {
+		batches.push(currentBatch);
+	}
+
+	return batches;
 }
 
 // The main function that dispatches to the correct parser
-export const parseSql = (sqlString: string): Record<string, any> | null => {
+// ✨ UPDATED: The return type is now 'ParseResult | null'
+export const parseSql = (sqlString: string): ParseResult | null => {
 	try {
 		const parser = new Parser();
-		let ast = parser.astify(sqlString);
+		let ast: AST | AST[] = parser.astify(sqlString);
 
-		// Handle both single AST object and array of ASTs (for multi-statement SQL)
-		// As requested, we'll just process the first statement if it's an array.
 		if (Array.isArray(ast)) {
 			ast = ast[0];
 		}
-
 		if (!ast) return null;
 
+		// ✨ UPDATED: The switch now returns the standardized object
 		switch (ast.type) {
 			case 'create':
-				return parseCreateTable(ast);
+				return {
+					sqlType: 'create table',
+					data: parseCreateTable(ast)
+				};
 			case 'select':
-				return parseSelect(ast);
+				return {
+					sqlType: 'select',
+					data: parseSelect(ast)
+				};
 			case 'insert':
-				return parseInsert(ast); // ✨ New case for INSERT
+				return {
+					sqlType: 'insert',
+					data: parseInsert(ast)
+				};
 			default:
 				throw new Error(`Unsupported SQL statement type: ${ast.type}`);
 		}
@@ -199,8 +304,7 @@ export const parseSql = (sqlString: string): Record<string, any> | null => {
 // -----------------------------------------------------------------------------
 // CREATE TABLE PARSER
 // -----------------------------------------------------------------------------
-function parseCreateTable(ast: AST): Record<string, any> | null {
-	// This logic remains the same as before.
+function parseCreateTable(ast: AST): CreateTableData | null {
 	if ((ast as any).keyword !== 'table') return null;
 	const typeMap: Record<string, string> = {
 		'INTEGER': 'number', 'TEXT': 'string', 'REAL': 'number',
@@ -238,14 +342,13 @@ function parseCreateTable(ast: AST): Record<string, any> | null {
 		}
 	}
 	if (indexColumns.length > 0) result.indexes = indexColumns.join(',');
-	return result;
+	return result as CreateTableData;
 }
 
 // -----------------------------------------------------------------------------
 // SELECT PARSER
 // -----------------------------------------------------------------------------
-function parseSelect(ast: AST): Record<string, any> {
-	// This logic remains the same as before.
+function parseSelect(ast: AST): SelectData {
 	const buildWhereString = (node: any): string => {
 		if (!node) return '';
 		if (node.type === 'double_quote_string' || node.type === 'single_quote_string') return `"${node.value}"`;
@@ -265,37 +368,27 @@ function parseSelect(ast: AST): Record<string, any> {
 	const tablename = (ast as any).from[0].table;
 	const typeClause = `type = "tabledata" && tablename = "${tablename}"`;
 	const mainWhereClause = buildWhereString((ast as any).where);
-	return { select: selectedColumns, tablename: tablename, where: `${typeClause}${mainWhereClause===''?'':' && '}${mainWhereClause}` };
+	return { select: selectedColumns, tablename: tablename, where: `${typeClause}${mainWhereClause === '' ? '' : ' && '}${mainWhereClause}` };
 }
 
 // -----------------------------------------------------------------------------
 // INSERT PARSER
 // -----------------------------------------------------------------------------
-function parseInsert(ast: AST): Record<string, any> {
-	const insertAst = ast as any; // Cast to 'any' for easier property access
+function parseInsert(ast: AST): InsertData {
+	const insertAst = ast as any;
 	const result: { [key: string]: any } = {};
-
-	// Set the type to tabledata
 	result.type = 'tabledata';
-
-	// Set the 'tablename' property from the table name
 	result.tablename = insertAst.table[0].table;
-
 	const columns: string[] = insertAst.columns;
-	// The values are in a nested structure
 	const values: any[] = insertAst.values[0].value;
-
 	if (columns.length !== values.length) {
 		throw new Error('Insert statement has a mismatch between columns and values.');
 	}
-
-	// Map each column to its corresponding value
 	columns.forEach((colName, index) => {
 		const valueNode = values[index];
 		result[colName] = valueNode.value;
 	});
-
-	return result;
+	return result as InsertData;
 }
 
 // --- DEMO ---
