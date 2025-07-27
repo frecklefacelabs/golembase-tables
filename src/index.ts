@@ -1,7 +1,12 @@
 import { Annotations, transformAnnotationsToPOJO, transformListPOJOToAnnotations, transformPOJOToAnnotations } from "@freckleface/golembase-js-transformations";
 import { AccountData, Annotation, createClient, GolemBaseCreate, Tagged } from "golem-base-sdk";
-import { filterObjectBySelect, parseSql, SQLCreateTableToGBCreate, SQLInsertToGBCreate } from "./sql_to_object.js";
+import { buildFkQueries, filterObjectBySelect, ParsedForeignKey, parseForeignKeyString, parseSql, SQLCreateTableToGBCreate, SQLInsertToGBCreate } from "./sql_to_object.js";
 import { readFileSync } from "fs";
+
+/**
+ * TODO:
+ * Convert all tablenames to lowercase, every time. The system is case-sensitive and if the users do create table departments and SELECT * FROM DEPARTMENTS, they won't match up.
+*/
 
 /**
  * Describes the structure of a single "view as" mapping object.
@@ -44,43 +49,43 @@ export const test1 = async () => {
 	// Todo: Check if table by this name already exists; if so, grab it and do an update/overwrite
 
 	// todo: Need to handle situation of this being an update
-	const create = SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
-		`CREATE TABLE users (
-			user_id INTEGER,
-			username TEXT,
-			dept_id INTEGER,
-			building TEXT,
-			phone_number TEXT,
-			CONSTRAINT fk__view_as__department_name 
-			FOREIGN KEY (dept_id) REFERENCES departments(dept_id),
-			INDEX idx_username (username),
-			INDEX idx_dept_id (dept_id)
-		)`
-	);
-	console.log(create);
+	// const create = SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+	// 	`CREATE TABLE users (
+	// 		user_id INTEGER,
+	// 		username TEXT,
+	// 		dept_id INTEGER,
+	// 		building TEXT,
+	// 		phone_number TEXT,
+	// 		CONSTRAINT fk__view_as__department_name 
+	// 		FOREIGN KEY (dept_id) REFERENCES departments(dept_id),
+	// 		INDEX idx_username (username),
+	// 		INDEX idx_dept_id (dept_id)
+	// 	)`
+	// );
+	// console.log(create);
 
-	const create2 = SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
-		`CREATE TABLE departments (
-		    dept_id INTEGER,
-			department_name TEXT,
-			city TEXT,
-			INDEX idx_dept_id (dept_id),
-			INDEX idx_department_name (department_name)
-		)`
-	)
-	console.log(create2);
+	// const create2 = SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+	// 	`CREATE TABLE departments (
+	// 	    dept_id INTEGER,
+	// 		department_name TEXT,
+	// 		city TEXT,
+	// 		INDEX idx_dept_id (dept_id),
+	// 		INDEX idx_department_name (department_name)
+	// 	)`
+	// )
+	// console.log(create2);
 
-	const insert1 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')");
-	console.log(insert1);
+	// const insert1 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')");
+	// console.log(insert1);
 
-	const insert2 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')");
-	console.log(insert2);
+	// const insert2 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')");
+	// console.log(insert2);
 
-	const insert3 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')");
-	console.log(insert3);
+	// const insert3 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')");
+	// console.log(insert3);
 
-	const insert4 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')");
-	console.log(insert4);
+	// const insert4 = SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')");
+	// console.log(insert4);
 
 	let creates: GolemBaseCreate[] = [
 
@@ -106,20 +111,20 @@ export const test1 = async () => {
 				INDEX idx_department_name (department_name)
 			)`
 		),
-		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')"),
-		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')"),
-		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')"),
-		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO DEPARTMENTS (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (101, 'asmith', 'ACCT', 'Main', '555-0101');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (102, 'bjones', 'MGT', 'West Wing', '555-0102');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (103, 'cwilliams', 'ACCT', 'Main', '555-0103');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (104, 'davis_r', 'HR', 'Annex', '555-0104');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (105, 'emiller', 'MGT', 'West Wing', '555-0105');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (106, 'fgarcia', 'IT', 'South Tower', '555-0106');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (107, 'h.chen', 'ACCT', 'Main', '555-0107');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (108, 'ijackson', 'HR', 'Annex', '555-0108');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (109, 'kim_s', 'IT', 'South Tower', '555-0109');"),
-		SQLInsertToGBCreate("'GOLEM-SQLTEST-v0.1'", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (110, 'l.taylor', 'MGT', 'West Wing', '555-0110');"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO departments (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO departments (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO departments (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1',"INSERT INTO departments (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (101, 'asmith', 'ACCT', 'Main', '555-0101');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (102, 'bjones', 'MGT', 'West Wing', '555-0102');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (103, 'cwilliams', 'ACCT', 'Main', '555-0103');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (104, 'davis_r', 'HR', 'Annex', '555-0104');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (105, 'emiller', 'MGT', 'West Wing', '555-0105');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (106, 'fgarcia', 'IT', 'South Tower', '555-0106');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (107, 'h.chen', 'ACCT', 'Main', '555-0107');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (108, 'ijackson', 'HR', 'Annex', '555-0108');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (109, 'kim_s', 'IT', 'South Tower', '555-0109');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (110, 'l.taylor', 'MGT', 'West Wing', '555-0110');"),
 
 	];
 
@@ -140,16 +145,62 @@ export const test1 = async () => {
 	console.log(selectSqlObj2);
 	// Grab the tablename and grab its metadata
 	// TODO: Store table's hash as well so we can grab it directly rather than query?
-	//const select_table = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${}"`)
+	const select_tables = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectSqlObj2?.tablename}"`)
+	console.log(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectSqlObj2?.tablename}"`);
+	let FKs: Record<string, ParsedForeignKey> = {};
+	if (select_tables.length > 0) {
+		// Grab the table's metadata
+		const table_metadata = await client.getEntityMetaData(select_tables[0]?.entityKey);
+		for (let pair of table_metadata.stringAnnotations) {
+			const foundFk = parseForeignKeyString(pair.value);
+			if (foundFk) {
+				console.log('FOUND FOREIGN KEY - VIEW');
+				const keyname = foundFk.localKey as string;
+				FKs[keyname] = foundFk;
+			}
+		}
+	}
+	console.log(FKs);
 
 	const result2 = await client.queryEntities(selectSqlObj2?.where);
-	console.log(result2);
 	for (let item of result2) {
 		const metadata = await client.getEntityMetaData(item.entityKey);
 		// Convert to a data object
-		const obj = await transformAnnotationsToPOJO(metadata);
+		const obj = transformAnnotationsToPOJO(metadata);
 		//console.log(obj);
-		const final = filterObjectBySelect(selectSqlObj2?.select, obj);
+		let final = filterObjectBySelect(selectSqlObj2?.select, obj);
+
+		// Now for the foreign key view-as (if present)
+
+		const builtFKs = buildFkQueries(final, FKs);
+		if (builtFKs?.length > 0) {
+			//console.log('READY TO QUERY DEPARTMENT:');
+			//console.log(builtFKs);
+			for (let fk of builtFKs) {
+				// Query for the foreign key's item
+				// 1. Query
+				// 2. Grab metadata
+				// 3. Convert to POJO
+
+				console.log(fk.queryString);
+				const query_fk = await client.queryEntities(fk.queryString);
+
+				// Grab the keyname to use (same as "view as") and store its value locally with the same name.
+				// Should only return one, but just in case, just grab first
+
+				if (query_fk && query_fk.length > 0) {
+					const fk_metadata = await client.getEntityMetaData(query_fk[0].entityKey);
+					const fk_pojo = transformAnnotationsToPOJO(fk_metadata);
+
+					//console.log('FOUND FOREIGN KEY:');
+					//console.log(fk_pojo);
+
+					final[fk.viewKey] = fk_pojo[fk.viewKey];
+
+				}
+			}
+		}
+
 		console.log(final);
 	}
 
@@ -221,13 +272,13 @@ await test1();
 // 	}
 
 // 	// Grab the tablenames
-// 	let tableNames: string = indexes.map((item) => {
+// 	let tablenames: string = indexes.map((item) => {
 // 		return item.tablename;
 // 	}).join(',');
 
 // 	// the tablenames member will include the tablenames as a single comma-separated string.
 // 	// If a tablename contains anything but letters, numbers, underscores, dashes, throw an error.
-// 	bigObj.tablenames = tableNames;  // Need to create an interface; this gives me error: Property 'tablenames' does not exist on type '{}' (unless I throw "any" after let bigObj)
+// 	bigObj.tablenames = tablenames;  // Need to create an interface; this gives me error: Property 'tablenames' does not exist on type '{}' (unless I throw "any" after let bigObj)
 
 // 	for (let index of indexes) {
 // 		bigObj[index.tablename] = index.indexes.join(',');

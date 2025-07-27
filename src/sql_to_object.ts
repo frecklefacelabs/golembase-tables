@@ -37,13 +37,11 @@ export const SQLCreateTableToGBCreate = (app:string, createSql: string): GolemBa
 
 	let createTableObj: any = { app: app, ...parseSql(createSql) };
 
-	console.log(createTableObj);
-	
 	// Create empty index entries, which will get filled in as we add data for this table
 	for (let index of createTableObj.indexes?.split(',') || []) {
 		createTableObj[`index_${index}`] = '';
 	}
-	console.log(createTableObj);
+	//console.log(createTableObj);
 
 	const create: GolemBaseCreate = {
 		data: encoder.encode(`${createTableObj.type} ${createTableObj.tablename}`),
@@ -57,7 +55,7 @@ export const SQLCreateTableToGBCreate = (app:string, createSql: string): GolemBa
 export const SQLInsertToGBCreate = (app: string, insertSQL: string): GolemBaseCreate => {
 
 	let insertObj: any = { app: app, ...parseSql(insertSQL) };
-	console.log(insertObj);
+	//console.log(insertObj);
 
 	const create: GolemBaseCreate = {
 		data: encoder.encode(`${insertObj.type} ${insertObj.tablename}`),
@@ -95,6 +93,72 @@ export const filterObjectBySelect = (select: string, obj: Record<string, any>): 
   }
 
   return filteredObj;
+}
+
+export interface ParsedForeignKey {
+  tablename: string;
+  localKey: string;
+  viewKey: string;
+};
+export const parseForeignKeyString = (input: string): { tablename: string; localKey: string; viewKey: string } | null => {
+  // Regex to match the pattern and capture the three text parts.
+  const fkRegex = /^.*\|FK:(.*):(.*):(.*)$/;
+
+  // Use the .match() method to execute the regex against the input string.
+  const match = input.match(fkRegex);
+
+  // If match is null, the string didn't fit the pattern.
+  if (!match) {
+    return null;
+  }
+
+  // The captured groups are in the resulting array at indices 1, 2, and 3.
+  // match[0] would be the entire matched string.
+  return {
+    tablename: match[1],    // The first captured group: 'departments'
+    localKey: match[2], // The second captured group: 'dept_id'
+    viewKey: match[3],  // The third captured group: 'department_name'
+  };
+}
+
+// The flattened return type for a single result
+type FkQueryResult = {
+  queryString: string;
+} & ParsedForeignKey;
+
+/**
+ * Finds all foreign keys in a POJO and builds a query object for each one.
+ *
+ * @param pojo The data object to scan for foreign keys.
+ * @param fks A map of foreign key metadata.
+ * @returns An array of objects, one for each foreign key found.
+ */
+export const buildFkQueries = (pojo: Record<string, any>, fks: Record<string, ParsedForeignKey>): FkQueryResult[] => {
+  // Initialize an empty array to store all the results
+  const results: FkQueryResult[] = [];
+
+  for (const [key, value] of Object.entries(pojo)) {
+    // Check if the current key from the POJO exists in our FKs map
+    if (fks[key]) {
+      const fkInfo = fks[key];
+
+      const quote = (val: any) => typeof val === 'string' ? `"${val}"` : val;
+      const appClause = `app=${quote(pojo.app)}`;
+      const typeClause = `type="tabledata"`;
+      const tableClause = `tablename="${fkInfo.tablename}"`;
+      const keyClause = `${fkInfo.localKey}=${quote(value)}`;
+      const assembledQueryString = `${appClause} && ${typeClause} && ${tableClause} && ${keyClause}`;
+
+      // ✨ Push the new object into the results array instead of returning
+      results.push({
+        queryString: assembledQueryString,
+        ...fkInfo
+      });
+    }
+  }
+
+  // Return the array of all found foreign key queries
+  return results;
 }
 
 // The main function that dispatches to the correct parser
@@ -143,7 +207,7 @@ function parseCreateTable(ast: AST): Record<string, any> | null {
 	};
 	const result: { [key: string]: any } = {
 		type: 'table',
-		tableName: (ast as any).table[0].table,
+		tablename: (ast as any).table[0].table,
 	};
 	const indexColumns: string[] = [];
 	for (const def of (ast as any).create_definitions) {
@@ -198,10 +262,10 @@ function parseSelect(ast: AST): Record<string, any> {
 		return '';
 	};
 	const selectedColumns = (ast as any).columns.map((col: any) => col.expr.column).join(',');
-	const tableName = (ast as any).from[0].table;
-	const typeClause = `type = "tabledata" && tablename = "${tableName}"`;
+	const tablename = (ast as any).from[0].table;
+	const typeClause = `type = "tabledata" && tablename = "${tablename}"`;
 	const mainWhereClause = buildWhereString((ast as any).where);
-	return { select: selectedColumns, table: tableName, where: `${typeClause}${mainWhereClause===''?'':' && '}${mainWhereClause}` };
+	return { select: selectedColumns, tablename: tablename, where: `${typeClause}${mainWhereClause===''?'':' && '}${mainWhereClause}` };
 }
 
 // -----------------------------------------------------------------------------
