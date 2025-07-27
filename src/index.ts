@@ -79,7 +79,7 @@ export const doSQL = async (app: string, big_sql: string): Promise<string[]> => 
 				// There is always only one select per batch, so grab it
 
 				let selectObj: SelectData = batch[0].data;
-				const select_tables = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectObj.tablename}"`);
+				const select_tables = await client.queryEntities(`app="${app}" && type="table" && tablename="${selectObj.tablename}"`);
 				let FKs: Record<string, ParsedForeignKey> = {};
 				if (select_tables.length > 0) {
 					// Grab the table's metadata
@@ -93,6 +93,8 @@ export const doSQL = async (app: string, big_sql: string): Promise<string[]> => 
 					}
 				}
 
+				selectObj.where = `app="${app}" && ${selectObj.where}`
+
 				const result2 = await client.queryEntities(selectObj.where);
 				for (let item of result2) {
 					const metadata = await client.getEntityMetaData(item.entityKey);
@@ -101,7 +103,6 @@ export const doSQL = async (app: string, big_sql: string): Promise<string[]> => 
 					let final = filterObjectBySelect(selectObj.select, obj);
 
 					// Now for the foreign key view-as (if present)
-
 					const builtFKs = buildFkQueries(final, FKs);
 					if (builtFKs?.length > 0) {
 						for (let fk of builtFKs) {
@@ -118,7 +119,6 @@ export const doSQL = async (app: string, big_sql: string): Promise<string[]> => 
 							if (query_fk && query_fk.length > 0) {
 								const fk_metadata = await client.getEntityMetaData(query_fk[0].entityKey);
 								const fk_pojo = transformAnnotationsToPOJO(fk_metadata);
-
 								final[fk.viewKey] = fk_pojo[fk.viewKey];
 
 							}
@@ -137,7 +137,8 @@ export const doSQL = async (app: string, big_sql: string): Promise<string[]> => 
 		}
 
 	}
-
+	//console.log('SENDING BACK OUTPUT:');
+	//console.log(output);
 	return output;
 
 }
@@ -251,7 +252,7 @@ export const test1 = async () => {
 }
 
 async function testCreateInsertSelect() {
-	let output = await doSQL("GOLEM-SQLTEST-v0.1", `
+	let output = await doSQL("GOLEM-SQLTEST-v1.0", `
 CREATE TABLE users (
 	user_id INTEGER,
 	username TEXT,
@@ -294,12 +295,11 @@ select dept_id, department_name from departments;
 
 
 async function testSelect() {
-	let output = await doSQL("GOLEM-SQLTEST-v0.1", `
-	select username, dept_id from users where building = 'West Wing';
-	select username, dept_id from users where building = 'South Tower';
-	select dept_id, department_name from departments;
+	let output = await doSQL("GOLEM-SQLTEST-v1.0", `
+		select username, dept_id from users where username = "asmith";
 	`)
 
 	console.log(output);
 }
 
+await testSelect();
