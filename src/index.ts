@@ -9,6 +9,8 @@ import * as util from 'util';
  * Convert all tablenames to lowercase, every time. The system is case-sensitive and if the users do create table departments and SELECT * FROM DEPARTMENTS, they won't match up.
  * Check if table name already exists; if so, update rather than create (or perhaps issue exception?)
  * Need to get lists of values like the older indexer
+ * doSQL needs a path to the private key file, or by default use the ~/.config business. Presently it's just looking in the working directory.
+ * SELECT seems to be ignoring the app name? When I run it with a new app name, I'm getting twice the departments etc, including other app names.
 */
 
 
