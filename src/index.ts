@@ -20,7 +20,7 @@ const keyBytes = readFileSync('./private.key');
 const key: AccountData = new Tagged("privatekey", keyBytes);
 export const client = await createClient(1337, key, 'http://localhost:8545', 'ws://localhost:8545');
 
-export const doSQL = async (app: string, big_sql: string) => {
+export const doSQL = async (app: string, big_sql: string): Promise<string[]> => {
 
 	const sqls: string[] = big_sql.split(';');
 	console.log(sqls);
@@ -54,14 +54,24 @@ export const doSQL = async (app: string, big_sql: string) => {
 				for (let createOrInsert of batch) {
 					if (createOrInsert.sqlType == 'create table') {
 						golemBatch.push(CreateTableObjToGBCreate(app, createOrInsert));
+						output.push(`TABLE CREATED: ${createOrInsert.data?.tablename}`)
 					}
 					else {
 						golemBatch.push(InsertObjToGBCreate(app, createOrInsert));
+						output.push(`DATA INSERTED: ${createOrInsert.data?.tablename}`)
 					}
 				}
-				console.log(util.inspect(golemBatch, { depth: null }));
+				//console.log(util.inspect(golemBatch, { depth: null }));
 
 				// TODO: Run them NOW as a single transaction
+
+				console.log('========GOLEM CREATES========')
+				console.log(golemBatch);
+				console.log('========GOLEM CREATES========')
+
+				const receipts = await client.createEntities(golemBatch);
+				console.log(receipts);
+
 			}
 			else {
 				// There is always only one select per batch, so grab it
@@ -113,8 +123,10 @@ export const doSQL = async (app: string, big_sql: string) => {
 						}
 					}
 
-					console.log('===========RESULTS OF SELECT===========')
-					console.log(final);
+					//console.log('===========RESULTS OF SELECT===========')
+					//console.log(final);
+
+					output.push(JSON.stringify(final));
 
 				}
 
@@ -124,15 +136,17 @@ export const doSQL = async (app: string, big_sql: string) => {
 
 	}
 
+	return output;
+
 }
 
-	export const test1 = async () => {
+export const test1 = async () => {
 
 
-		let creates: GolemBaseCreate[] = [
+	let creates: GolemBaseCreate[] = [
 
-			SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
-				`CREATE TABLE users (
+		SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+			`CREATE TABLE users (
 				user_id INTEGER,
 				username TEXT,
 				dept_id INTEGER,
@@ -143,100 +157,100 @@ export const doSQL = async (app: string, big_sql: string) => {
 				INDEX idx_username (username),
 				INDEX idx_dept_id (dept_id)
 			)`
-			),
-			SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
-				`CREATE TABLE departments (
+		),
+		SQLCreateTableToGBCreate('GOLEM-SQLTEST-v0.1',
+			`CREATE TABLE departments (
 				dept_id INTEGER,
 				department_name TEXT,
 				city TEXT,
 				INDEX idx_dept_id (dept_id),
 				INDEX idx_department_name (department_name)
 			)`
-			),
-			SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')"),
-			SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')"),
-			SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')"),
-			SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (101, 'asmith', 'ACCT', 'Main', '555-0101');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (102, 'bjones', 'MGT', 'West Wing', '555-0102');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (103, 'cwilliams', 'ACCT', 'Main', '555-0103');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (104, 'davis_r', 'HR', 'Annex', '555-0104');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (105, 'emiller', 'MGT', 'West Wing', '555-0105');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (106, 'fgarcia', 'IT', 'South Tower', '555-0106');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (107, 'h.chen', 'ACCT', 'Main', '555-0107');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (108, 'ijackson', 'HR', 'Annex', '555-0108');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (109, 'kim_s', 'IT', 'South Tower', '555-0109');"),
-			SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (110, 'l.taylor', 'MGT', 'West Wing', '555-0110');"),
+		),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('ACCT', 'Accounting', 'New York')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('IT', 'Information Technology', 'New York')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('MGT', 'Management', 'Boston')"),
+		SQLInsertToGBCreate('GOLEM-SQLTEST-v0.1', "INSERT INTO departments (dept_id, department_name, city) values ('HR', 'Human Resources', 'Chicago')"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (101, 'asmith', 'ACCT', 'Main', '555-0101');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (102, 'bjones', 'MGT', 'West Wing', '555-0102');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (103, 'cwilliams', 'ACCT', 'Main', '555-0103');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (104, 'davis_r', 'HR', 'Annex', '555-0104');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (105, 'emiller', 'MGT', 'West Wing', '555-0105');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (106, 'fgarcia', 'IT', 'South Tower', '555-0106');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (107, 'h.chen', 'ACCT', 'Main', '555-0107');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (108, 'ijackson', 'HR', 'Annex', '555-0108');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (109, 'kim_s', 'IT', 'South Tower', '555-0109');"),
+		SQLInsertToGBCreate("GOLEM-SQLTEST-v0.1", "INSERT INTO users (user_id, username, dept_id, building, phone_number) VALUES (110, 'l.taylor', 'MGT', 'West Wing', '555-0110');"),
 
-		];
+	];
 
-		// Joins happen automatically; they're built in via view-as constraints on foreign keys
+	// Joins happen automatically; they're built in via view-as constraints on foreign keys
 
-		//const receipts = await client.createEntities(creates);
-		//console.log(receipts);
+	//const receipts = await client.createEntities(creates);
+	//console.log(receipts);
 
-		// Here's a good example of why we probably want to make calls into the library at some level
-		// The call happens after prepping the SQL and before selecting out the fields
-		//const selectSql2 = "select username, dept_id from users where building = 'Main'";
-		const selectSql = "select username, dept_id from users where building = 'West Wing'";
-		const selectSqlObj = parseSql(selectSql);
-		// Grab the tablename and grab its metadata
-		// TODO: Store table's hash as well so we can grab it directly rather than query?
-		const select_tables = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectSqlObj?.data?.tablename}"`);
-		let FKs: Record<string, ParsedForeignKey> = {};
-		if (select_tables.length > 0) {
-			// Grab the table's metadata
-			const table_metadata = await client.getEntityMetaData(select_tables[0]?.entityKey);
-			for (let pair of table_metadata.stringAnnotations) {
-				const foundFk = parseForeignKeyString(pair.value);
-				if (foundFk) {
-					const keyname = foundFk.localKey as string;
-					FKs[keyname] = foundFk;
-				}
+	// Here's a good example of why we probably want to make calls into the library at some level
+	// The call happens after prepping the SQL and before selecting out the fields
+	//const selectSql2 = "select username, dept_id from users where building = 'Main'";
+	const selectSql = "select username, dept_id from users where building = 'West Wing'";
+	const selectSqlObj = parseSql(selectSql);
+	// Grab the tablename and grab its metadata
+	// TODO: Store table's hash as well so we can grab it directly rather than query?
+	const select_tables = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectSqlObj?.data?.tablename}"`);
+	let FKs: Record<string, ParsedForeignKey> = {};
+	if (select_tables.length > 0) {
+		// Grab the table's metadata
+		const table_metadata = await client.getEntityMetaData(select_tables[0]?.entityKey);
+		for (let pair of table_metadata.stringAnnotations) {
+			const foundFk = parseForeignKeyString(pair.value);
+			if (foundFk) {
+				const keyname = foundFk.localKey as string;
+				FKs[keyname] = foundFk;
 			}
 		}
-
-		const result2 = await client.queryEntities(selectSqlObj?.data?.where);
-		for (let item of result2) {
-			const metadata = await client.getEntityMetaData(item.entityKey);
-			// Convert to a data object
-			const obj = transformAnnotationsToPOJO(metadata);
-			let final = filterObjectBySelect(selectSqlObj?.data?.select, obj);
-
-			// Now for the foreign key view-as (if present)
-
-			const builtFKs = buildFkQueries(final, FKs);
-			if (builtFKs?.length > 0) {
-				for (let fk of builtFKs) {
-					// Query for the foreign key's item
-					// 1. Query
-					// 2. Grab metadata
-					// 3. Convert to POJO
-
-					const query_fk = await client.queryEntities(fk.queryString);
-
-					// Grab the keyname to use (same as "view as") and store its value locally with the same name.
-					// Should only return one, but just in case, just grab first
-
-					if (query_fk && query_fk.length > 0) {
-						const fk_metadata = await client.getEntityMetaData(query_fk[0].entityKey);
-						const fk_pojo = transformAnnotationsToPOJO(fk_metadata);
-
-						final[fk.viewKey] = fk_pojo[fk.viewKey];
-
-					}
-				}
-			}
-
-			console.log(final);
-		}
-
-
 	}
 
-	//await test1();
+	const result2 = await client.queryEntities(selectSqlObj?.data?.where);
+	for (let item of result2) {
+		const metadata = await client.getEntityMetaData(item.entityKey);
+		// Convert to a data object
+		const obj = transformAnnotationsToPOJO(metadata);
+		let final = filterObjectBySelect(selectSqlObj?.data?.select, obj);
 
-	doSQL("GOLEM-SQLTEST-v0.1", `
+		// Now for the foreign key view-as (if present)
+
+		const builtFKs = buildFkQueries(final, FKs);
+		if (builtFKs?.length > 0) {
+			for (let fk of builtFKs) {
+				// Query for the foreign key's item
+				// 1. Query
+				// 2. Grab metadata
+				// 3. Convert to POJO
+
+				const query_fk = await client.queryEntities(fk.queryString);
+
+				// Grab the keyname to use (same as "view as") and store its value locally with the same name.
+				// Should only return one, but just in case, just grab first
+
+				if (query_fk && query_fk.length > 0) {
+					const fk_metadata = await client.getEntityMetaData(query_fk[0].entityKey);
+					const fk_pojo = transformAnnotationsToPOJO(fk_metadata);
+
+					final[fk.viewKey] = fk_pojo[fk.viewKey];
+
+				}
+			}
+		}
+
+		console.log(final);
+	}
+
+
+}
+
+//await test1();
+
+let output = await doSQL("GOLEM-SQLTEST-v0.1", `
 CREATE TABLE users (
 	user_id INTEGER,
 	username TEXT,
@@ -273,3 +287,5 @@ select username, dept_id from users where building = 'West Wing';
 select username, dept_id from users where building = 'South Tower';
 select dept_id, department_name from departments;
 `)
+
+console.log(output);
