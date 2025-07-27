@@ -133,14 +133,10 @@ export const test1 = async () => {
 	//const receipts = await client.createEntities(creates);
 	//console.log(receipts);
 
-	// const selectSql = "select usernanme, dept_id from users";
-	// const selectSqlObj = parseSql(selectSql);
-	// const result1 = await client.queryEntities(selectSqlObj?.where);
-	// console.log(result1);
-
 	// Here's a good example of why we probably want to make calls into the library at some level
 	// The call happens after prepping the SQL and before selecting out the fields
-	const selectSql2 = "select username, dept_id from users where building = 'Main'";
+	//const selectSql2 = "select username, dept_id from users where building = 'Main'";
+	const selectSql2 = "select username, dept_id from users where building = 'West Wing'";
 	const selectSqlObj2 = parseSql(selectSql2);
 	// Grab the tablename and grab its metadata
 	// TODO: Store table's hash as well so we can grab it directly rather than query?
