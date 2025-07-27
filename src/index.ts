@@ -297,8 +297,6 @@ select dept_id, department_name from departments;
 async function testSelect() {
 	let output = await doSQL("GOLEM-SQLTEST-v0.1", `
 	select username, dept_id from users where building = 'West Wing';
-	select username, dept_id from users where building = 'South Tower';
-	select dept_id, department_name from departments;
 	`)
 
 	console.log(output);
