@@ -22,7 +22,11 @@ export const client = await createClient(1337, key, 'http://localhost:8545', 'ws
 
 export const doSQL = async (app: string, big_sql: string): Promise<string[]> => {
 
-	const sqls: string[] = big_sql.split(';');
+	const delimiterRegex = /\s*;\s*/;
+	const trailingSemicolonRegex = /\s*;\s*$/; // Regex for removing final semicolon
+
+	// Remove whitespace at beginning and end via trim() and then remove final semicolon if present and then split on semicolons with optional whitespace around the semicolons
+	const sqls: string[] = big_sql.trim().replace(trailingSemicolonRegex, '').split(delimiterRegex);
 	console.log(sqls);
 
 	// Parse each one and get back a data block
@@ -64,10 +68,6 @@ export const doSQL = async (app: string, big_sql: string): Promise<string[]> => 
 				//console.log(util.inspect(golemBatch, { depth: null }));
 
 				// TODO: Run them NOW as a single transaction
-
-				console.log('========GOLEM CREATES========')
-				console.log(golemBatch);
-				console.log('========GOLEM CREATES========')
 
 				const receipts = await client.createEntities(golemBatch);
 				console.log(receipts);
@@ -250,7 +250,9 @@ export const test1 = async () => {
 
 //await test1();
 
-let output = await doSQL("GOLEM-SQLTEST-v0.1", `
+
+async function testCreateInsertSelect() {
+	let output = await doSQL("GOLEM-SQLTEST-v0.1", `
 CREATE TABLE users (
 	user_id INTEGER,
 	username TEXT,
@@ -288,4 +290,18 @@ select username, dept_id from users where building = 'South Tower';
 select dept_id, department_name from departments;
 `)
 
-console.log(output);
+	console.log(output);
+}
+
+
+async function testSelect() {
+	let output = await doSQL("GOLEM-SQLTEST-v0.1", `
+	select username, dept_id from users where building = 'West Wing';
+	select username, dept_id from users where building = 'South Tower';
+	select dept_id, department_name from departments;
+	`)
+
+	console.log(output);
+}
+
+await testSelect();
