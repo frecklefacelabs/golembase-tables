@@ -142,11 +142,9 @@ export const test1 = async () => {
 	// The call happens after prepping the SQL and before selecting out the fields
 	const selectSql2 = "select username, dept_id from users where building = 'Main'";
 	const selectSqlObj2 = parseSql(selectSql2);
-	console.log(selectSqlObj2);
 	// Grab the tablename and grab its metadata
 	// TODO: Store table's hash as well so we can grab it directly rather than query?
 	const select_tables = await client.queryEntities(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectSqlObj2?.tablename}"`)
-	console.log(`app="GOLEM-SQLTEST-v0.1" && type="table" && tablename="${selectSqlObj2?.tablename}"`);
 	let FKs: Record<string, ParsedForeignKey> = {};
 	if (select_tables.length > 0) {
 		// Grab the table's metadata
@@ -154,35 +152,29 @@ export const test1 = async () => {
 		for (let pair of table_metadata.stringAnnotations) {
 			const foundFk = parseForeignKeyString(pair.value);
 			if (foundFk) {
-				console.log('FOUND FOREIGN KEY - VIEW');
 				const keyname = foundFk.localKey as string;
 				FKs[keyname] = foundFk;
 			}
 		}
 	}
-	console.log(FKs);
 
 	const result2 = await client.queryEntities(selectSqlObj2?.where);
 	for (let item of result2) {
 		const metadata = await client.getEntityMetaData(item.entityKey);
 		// Convert to a data object
 		const obj = transformAnnotationsToPOJO(metadata);
-		//console.log(obj);
 		let final = filterObjectBySelect(selectSqlObj2?.select, obj);
 
 		// Now for the foreign key view-as (if present)
 
 		const builtFKs = buildFkQueries(final, FKs);
 		if (builtFKs?.length > 0) {
-			//console.log('READY TO QUERY DEPARTMENT:');
-			//console.log(builtFKs);
 			for (let fk of builtFKs) {
 				// Query for the foreign key's item
 				// 1. Query
 				// 2. Grab metadata
 				// 3. Convert to POJO
 
-				console.log(fk.queryString);
 				const query_fk = await client.queryEntities(fk.queryString);
 
 				// Grab the keyname to use (same as "view as") and store its value locally with the same name.
@@ -191,9 +183,6 @@ export const test1 = async () => {
 				if (query_fk && query_fk.length > 0) {
 					const fk_metadata = await client.getEntityMetaData(query_fk[0].entityKey);
 					const fk_pojo = transformAnnotationsToPOJO(fk_metadata);
-
-					//console.log('FOUND FOREIGN KEY:');
-					//console.log(fk_pojo);
 
 					final[fk.viewKey] = fk_pojo[fk.viewKey];
 
