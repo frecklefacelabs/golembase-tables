@@ -1,6 +1,6 @@
 {
   "name": "@freckleface/golembase-tables",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "SQL-like table implementation on top of Golem Base",
   "homepage": "https://github.com/frecklefacelabs/golembase-tables#readme",
   "bugs": {
